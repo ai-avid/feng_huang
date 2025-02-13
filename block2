@@ -1,0 +1,53 @@
+import pandas as pd
+import numpy as np
+
+# Read CSV file and convert ad_date to datetime.
+df = pd.read_csv('your_data.csv')
+df['ad_date'] = pd.to_datetime(df['ad_date'], format='%m/%d/%Y')
+
+# Sort the DataFrame by ip_address and ad_date.
+df = df.sort_values(['ip_address', 'ad_date']).reset_index(drop=True)
+
+# Convert ad_date to numpy datetime64 with day resolution.
+# This makes computing differences in days faster.
+ad_dates = df['ad_date'].values.astype('datetime64[D]')
+ip_addresses = df['ip_address'].values
+ad_lengths = df['ad_length'].values.astype(float)
+n = len(df)
+
+# Preallocate an array for the computed adstock values.
+adstock = np.empty(n, dtype=float)
+
+# Define the decay rate per day.
+decay_rate = 0.1
+
+# Initialize variables for the current group's adstock and previous date.
+current_adstock = 0.0
+previous_date = None
+previous_ip = None
+
+# Loop over the sorted rows.
+for i in range(n):
+    # If we are on a new ip_address, reset the adstock.
+    if ip_addresses[i] != previous_ip:
+        current_adstock = 0.0
+        previous_date = ad_dates[i]
+        previous_ip = ip_addresses[i]
+        effective_decay = 1.0  # No decay for the first ad of a new ip_address.
+    else:
+        # Compute the time difference (in days) between current and previous ad.
+        delta_days = (ad_dates[i] - previous_date).astype(int)
+        # Calculate the effective decay based on the time gap.
+        effective_decay = np.exp(-decay_rate * delta_days)
+    
+    # Compute the current adstock recursively.
+    current_adstock = ad_lengths[i] + effective_decay * current_adstock
+    adstock[i] = current_adstock
+    # Update the previous date to the current date.
+    previous_date = ad_dates[i]
+
+# Assign the computed adstock values back to the DataFrame.
+df['adstock'] = adstock
+
+# Display the DataFrame.
+print(df)
